@@ -1,0 +1,83 @@
+# version: "3.9"
+
+# services:
+#   postgres_db:
+#     image: 'postgres:latest'
+#     container_name: "postgres_db"
+#     environment: 
+#       - POSTGRES_PASSWORD=${DB_PASSWORD}
+#     volumes:
+#       - ./tmp/db:/var/lib/postgresql/data
+#   web_app:
+#     tty: true
+#     stdin_open: true
+#     container_name: "web_application"
+#     depends_on: 
+#       - postgres_db
+#     command: bash -c "rm -f tmp/pids/server.pid && bundle exec rails s -p 3000 -b '0.0.0.0'"
+#     volumes: 
+#       - .:/app
+#     build: 
+#       context: .
+#       dockerfile: Dockerfile.dev
+#     ports:
+#       - '3000:3000'
+#   webpacker_server:
+#     container_name: "webpacker_server"
+#     image: ${DOCKER_IMAGE_NAME-docker-web-app}
+#     command: ["./scripts/webpacker_server.sh"]
+#     volumes:
+#       - .:/app:cached
+#     ports:
+#       - '3035:3035'
+
+# rm -f tmp/pids/server.pid && bundle exec rails s -b 0.0.0.0
+
+
+version: "3.9"
+
+services:
+  postgres_db:
+    image: 'postgres:latest'
+    container_name: "postgres_db"
+    ports:
+      - '5432:5432'
+    environment: 
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - ./tmp/db:/var/lib/postgresql/data
+  web_app:
+    tty: true
+    stdin_open: true
+    container_name: "web_application"
+    depends_on: 
+      - postgres_db
+    command: ["./scripts/wait_for.sh", "postgres_db:5432", "--", "./scripts/rails_server.sh"]
+    volumes: 
+      - .:/web_app:cached
+    build: 
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        precompileassets: 'not'
+    ports:
+      - '3000:3000'
+  test_suite:
+    depends_on: 
+      - postgres_db
+    command: ["./scripts/wait_for.sh", "postgres_db:5432", "--", "./scripts/rspec_test.sh"]
+    volumes:
+      - .:/app:cached
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        precompileassets: 'not'
+  webpacker_server:
+    container_name: "webpacker_server"
+    image: ${DOCKER_IMAGE_NAME-docker-web-app}
+    command: ["./scripts/webpacker_server.sh"]
+    volumes:
+      - .:/web_app/spec:cached
+    ports:
+      - '3035:3035'
